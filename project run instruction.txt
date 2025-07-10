@@ -1,0 +1,68 @@
+Step 1: Install Visual Studio Code and set up the Python environment by following 
+the instructions provided in the PowerPoint presentation: "VS Code and Python Installation on Windows.pptx."
+
+Step 2: Navigate to the folder containing the Smart Face Attendance System. In the address bar of the file explorer, 
+remove the path and type cmd, then press Enter. This will open the command prompt in the current directory.then type code .
+in command for opening vs code.
+
+Step 3: Open Visual Studio Code, then launch the terminal by navigating to View > Terminal or pressing `Ctrl + ```. In the terminal, 
+execute the following command to install the required dependencies:
+pip install -r requirements.txt
+
+Step4:After installed necessary package for run the code then need to follow below code 
+
+First, run the unknown_face_enroll.py script(py unknown_face_enroll.py).E.g( py unknown_face_enroll.py --id  unknown  --name  unknown)
+This script is used to store predictions of unknown individuals. 
+If a person is not already enrolled in the system, they will be identified and recorded as "unknown" 
+during the prediction process.
+
+Ensure the Dataset and Configurations are Properly Set Up Before Running enroll.py
+
+Dataset Folder:
+Verify that the dataset folder does not contain any images before running the enroll.py script.
+If there are any images present in the folder, they must be deleted to avoid conflicts during enrollment.
+Config File Setup:
+
+Navigate to the config folder and locate the config.json file.
+Ensure the file is empty of data and has the following default structure:
+
+E.g:
+{
+    "_default": {},
+    "student": {}
+}
+
+once everything you check it in the configuration file then need to run enroll.py(py enroll.py)
+after that it opens tkinter window for enrolling face (must be fill with person name and along with id) after that click to start enroll process
+
+1.first you need to enroll your face  
+this will collect your face 30 
+and save your id and name in database
+the 30 face images will be saved in dataset according to id
+
+once enrollment process is completed then you can exit from the window
+
+
+note:make sure that when run enroll.py only one face to be there when detect face for storing same person id in the folder otherwise 
+attendance will mismatch
+
+2. you have to encode the face encodings encode_faces.py (py encode_faces.py)
+this will locate facial embedding feature  and return them
+
+#note 
+before running this code delete the existing file in output file
+
+to run this code --> py encode_faces.py 
+it will generate a encodings.pickle file in output
+
+3. then we have to train the encodings.pickle 
+
+to run the code --> py train_model.py 
+it will generate a two pickle file named recognize and le in output
+
+now you have finshed generating a face regn model 
+
+4. we can now recognize the enrolled faces
+bfore run below set of intrustion attendance.json should be removed from the folder
+
+to run the code -- > py recognition.py
