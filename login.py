@@ -7,17 +7,17 @@ COLORS = {
     "background": "#FFFFFF",        # Main window background
     "card_bg": "#FFFFFF",           # Background for the central form/card
     "white": "#FFFFFF",             # General white for text/elements
-    "primary_green": "#337D45",     # Main green color
-    "green_hover": "#38A752",       # Darker green for hover effects
-     "text_dark2": "#333333",
-    "text_dark": "#2F4F4F",         # Dark text for main content
+    "primary_green":"#2F4F4F",     # Main green color
+    "green_hover": "#337D45",       # Darker green for hover effects
+    "text_dark2": "#333333",
+    "text_dark": "#38A752",         # Dark text for main content
     "text_light": "#666666",        # Lighter text for subtitles/placeholders
     "placeholder": "#A0A0A0",       # Placeholder text in entry fields
     "border": "#2F4F4F",            # Default border color for entries
     "border_focus": "#337D45",      # Green border when an entry is focused
-    "exit_button": "#337D45",       # Color for the close button
-    "exit_hover": "#38A752",        # Darker green for close button hover
-    "toggle_text": "#337D45",       # Color for password toggle button text
+    "exit_button": "#2F4F4F",       # Color for the close button
+    "exit_hover": "#337D45",        # Darker green for close button hover
+    "toggle_text": "#2F4F4F",       # Corrected: Removed leading space from color hex
     "error_red": "#DC3545"          # Red for error messages
 }
 
@@ -115,7 +115,7 @@ class LoginApp(tk.Tk):
         tk.Label(form, text="Login", font=FONTS["title"], bg=COLORS["card_bg"],
                  fg=COLORS["primary_green"]).grid(row=0, pady=(10, 5))
         tk.Label(form, text="Please log in to access the application", font=FONTS["subtitle"],
-                 bg=COLORS["card_bg"], fg=COLORS["border"]).grid(row=1, pady=(0, 20))
+                 bg=COLORS["card_bg"], fg=COLORS["border_focus"]).grid(row=1, pady=(0, 20))
 
         # Input fields for username and password
         self.username_entry = CustomEntry(form, "Username")
@@ -138,7 +138,7 @@ class LoginApp(tk.Tk):
 
     def _login_attempt(self):
         """
-        Handles the login logic. Checks credentials and launches 'enroll.py' on success.
+        Handles the login logic. Checks credentials and launches 'main.py' on success.
         """
         username = self.username_entry.get()
         password = self.password_entry.get()
@@ -146,11 +146,11 @@ class LoginApp(tk.Tk):
         if username == "mumu" and password == "1234":
             self.destroy() # Close the login window
             try:
-                # Launch the 'enroll.py' script using subprocess
-                subprocess.Popen(["python", "enroll.py"])
+                # Launch the 'main.py' script using subprocess
+                subprocess.Popen(["python", "main.py"])
             except Exception as e:
-                # Show an error message if 'enroll.py' cannot be launched
-                self._show_message("Error", f"Unable to launch 'enroll.py':\n{e}", "error")
+                # Show an error message if 'main.py' cannot be launched
+                self._show_message("Error", f"Unable to launch 'main.py':\n{e}", "error")
         else:
             # Show an error message for incorrect credentials
             self._show_message("Login Error", "Incorrect username or password.", "error")
@@ -242,7 +242,7 @@ class CustomEntry(tk.Frame):
         self.has_user_input = False # Tracks if the entry has user input or is showing placeholder
 
         self.entry = tk.Entry(self, font=FONTS["entry"], bg=COLORS["card_bg"],
-                              fg=COLORS["placeholder"], bd=0, relief="flat",
+                              fg=COLORS["placeholder"], bd=0, relief="flat", # Placeholder color initially
                               insertbackground=COLORS["primary_green"], justify="center")
         self.entry.pack(fill="x", padx=8, ipady=6)
 
@@ -259,7 +259,7 @@ class CustomEntry(tk.Frame):
         """Handles actions when the entry field gains focus."""
         if not self.has_user_input: # If it's currently showing the placeholder
             self.entry.delete(0, "end") # Clear the placeholder
-            self.entry.config(fg=COLORS["text_dark"]) # Change text color to dark
+            self.entry.config(fg="#000000") # Set text color to BLACK when typing starts
             if self.is_password:
                 self.entry.config(show="*") # Show asterisks for password
             self.has_user_input = True
@@ -269,7 +269,7 @@ class CustomEntry(tk.Frame):
         """Handles actions when the entry field loses focus."""
         if not self.entry.get(): # If the entry is empty
             self.entry.insert(0, self.placeholder) # Re-insert placeholder
-            self.entry.config(fg=COLORS["placeholder"], show="") # Reset text color and hide asterisks
+            self.entry.config(fg=COLORS["placeholder"], show="") # Reset text color to placeholder color
             self.has_user_input = False
         self.config(highlightthickness=1) # Reset border thickness
 
