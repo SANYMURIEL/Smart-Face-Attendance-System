@@ -4,14 +4,10 @@ import os
 import threading
 import cv2
 import face_recognition
-from PIL import Image, ImageTk, ImageFont # Import ImageFont for fallback icon
+from PIL import Image, ImageTk # Import ImageFont for fallback icon
 import time # Added for time.sleep
 import json # Added for dummy config file creation
 
-# --- LOGIC IMPORTS ---
-# Ensure this path is correct if project.utils is not in the same directory
-# You might need to adjust your PYTHONPATH or place project/utils.py in the same directory
-# or a directory that's in sys.path for this import to work.
 try:
     from project.utils import Conf
     from tinydb import TinyDB, where
@@ -417,7 +413,7 @@ class EnrollmentApp(ttk.Frame):
         self.percentage_label.pack(pady=(0, 10), anchor="center")
 
         # Buttons
-        self.enroll_button = self._create_themed_button(progress_buttons_section_frame, "Enroll Student", self._enroll_student)
+        self.enroll_button = self._create_themed_button(progress_buttons_section_frame, "Enroll Person", self._enroll_student)
         self.enroll_button.pack(pady=(10, 5), fill="x")
 
         self.reset_button = self._create_themed_button(progress_buttons_section_frame, "Reset Form", self._reset_form)
