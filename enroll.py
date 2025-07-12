@@ -1,3 +1,4 @@
+
 import tkinter as tk
 from tkinter import ttk
 import os
@@ -383,7 +384,31 @@ class EnrollmentApp(ttk.Frame):
         input_section_frame = tk.Frame(paned_window, bg=COLOR_CARD_BG, padx=20, pady=0, relief="flat", bd=0)
         paned_window.add(input_section_frame, stretch="always")
 
-        self.entry_id = self._create_styled_entry(input_section_frame, "Person ID:", placeholder_text="Enter numeric ID")
+        
+        # Get next auto-incremented ID from DB
+        def get_next_id_from_db():
+            try:
+                conf_path = "config/config.json"
+                if not os.path.exists(conf_path):
+                    return "1"
+                with open(conf_path, "r") as f:
+                    db_path = json.load(f).get("db_path", "dummy_db.json")
+                db = TinyDB(db_path)
+                student_table = db.table("student")
+                existing_ids = []
+                for record in student_table.all():
+                    for key in record:
+                        if key.isdigit():
+                            existing_ids.append(int(key))
+                db.close()
+                return str(max(existing_ids) + 1) if existing_ids else "1"
+            except Exception as e:
+                print("Auto ID error:", e)
+                return "1"
+
+        next_id = get_next_id_from_db()
+        self.entry_id = self._create_styled_entry(input_section_frame, "Person ID:", default=next_id)
+        self.entry_id.config(state=tk.DISABLED, disabledbackground=COLOR_BORDER, disabledforeground=COLOR_TEXT_DARK)
         self.entry_name = self._create_styled_entry(input_section_frame, "Person Name:", placeholder_text="Enter full name")
 
         self.config_path = self._create_styled_entry(input_section_frame, "Configuration Path:", default="config/config.json")
