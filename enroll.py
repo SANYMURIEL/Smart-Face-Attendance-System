@@ -1,13 +1,15 @@
 
+
 import tkinter as tk
 from tkinter import ttk
 import os
 import threading
 import cv2
 import face_recognition
-from PIL import Image, ImageTk # Import ImageFont for fallback icon
-import time # Added for time.sleep
-import json # Added for dummy config file creation
+from PIL import Image, ImageTk
+import time
+import json
+import subprocess # Ajouté : Importation du module subprocess
 
 try:
     from project.utils import Conf
@@ -72,7 +74,7 @@ except ImportError as e:
             return self
     where = where_dummy # Alias for the dummy where
     # For TinyDB Query, it's typically `Query().your_field.exists()` or `Query().your_field == value`
-    # Your original code used `User[student_id].exists()`, which implies student_id is a key in the document.
+    # Your original code used `User[student_id].exists()`, which implies student_id is the key directly.
     # The dummy `where_dummy` is adjusted to support this.
     class Query: # Dummy Query class to match the usage `User = Query()`
         def __getitem__(self, key):
@@ -629,6 +631,27 @@ class EnrollmentApp(ttk.Frame):
                         db_final.close() # Close DB
                         self.parent_root_for_toplevels.after(0, lambda: self._show_message("Success", f"Enrollment complete for {student_name}."))
                         self.parent_root_for_toplevels.after(0, self._reset_form) # Reset form after successful enrollment
+
+                        # Lancement des scripts encode_faces.py et train_model.py
+                        # Ces appels bloqueront le thread actuel (qui est un thread séparé de l'interface graphique),
+                        # mais pas l'interface utilisateur principale, tant que le thread n'est pas l'interface principale.
+                        print("Lancement de encode_faces.py...")
+                        try:
+                            # Utilisation de sys.executable pour s'assurer que le script est exécuté avec le même interpréteur Python
+                            subprocess.run(["python", "encode_faces.py"], check=True)
+                            print("encode_faces.py terminé avec succès.")
+                        except subprocess.CalledProcessError as sub_e:
+                            print(f"Erreur lors de l'exécution de encode_faces.py: {sub_e}")
+                            self.parent_root_for_toplevels.after(0, lambda: self._show_message("Script Error", f"Échec de l'encodage des visages: {sub_e}", type="error"))
+                            
+                        print("Lancement de train_model.py...")
+                        try:
+                            subprocess.run(["python", "train_model.py"], check=True)
+                            print("train_model.py terminé avec succès.")
+                        except subprocess.CalledProcessError as sub_e:
+                            print(f"Erreur lors de l'exécution de train_model.py: {sub_e}")
+                            self.parent_root_for_toplevels.after(0, lambda: self._show_message("Script Error", f"Échec de l'entraînement du modèle: {sub_e}", type="error"))
+
                     except Exception as db_e:
                         self.parent_root_for_toplevels.after(0, lambda: self._show_message("DB Error", f"Failed to save to database: {db_e}", type="error"))
 

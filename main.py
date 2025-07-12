@@ -4,7 +4,9 @@ from tkinter import messagebox
 from PIL import Image, ImageTk, ImageDraw, ImageFont # Nécessaire pour la manipulation d'images
 import os # Pour les opérations sur les fichiers et répertoires
 from datetime import datetime # Pour obtenir la date et l'heure actuelles
-
+# ... autres importations existantes ...
+from user import UserManagementPage # <-- NOUVEAU: Importation de UserManagementApp
+# ...
 # --- Styles et Couleurs ---
 # Définition des couleurs utilisées dans l'interface pour une gestion facile
 COLOR_BG = '#F7FFF9' # Couleur de fond principale
@@ -422,7 +424,7 @@ class DashboardApp:
             ("Dashboard", self.dashboard_icon_photo, self._show_bienvenue_section),
             ("Enroll User", self.enroll_icon_photo, self._show_enroll_section),
             ("Facial Recognition", self.face_recognition_icon_photo, None), # Nom en anglais, commande est None (pas d'action)
-            ("Users", self.users_icon_photo, None),
+            ("Users", self.users_icon_photo, self._show_user_management),
             ("Attendance", self.attendance_icon_photo, None),
             ("Settings", self.settings_icon_photo, None),
         ]
@@ -546,8 +548,32 @@ class DashboardApp:
         enroll_instance = EnrollmentApp(self.content_area, self.root)
         enroll_instance.pack(fill="both", expand=True, padx=0, pady=0)
         self.current_content_frame = enroll_instance
+        
 
     # Cette méthode n'est plus directement appelée par le bouton "Facial Recognition"
+    def _show_user_management(self):
+        """Displays the 'User Management' section in the content area."""
+        self._clear_content_area()
+
+        # Initialize the UserManagementPage. Pass self.content_area as the master.
+        # You can also pass a callback if user management needs to notify main.py
+        # about changes (e.g., if you have a dashboard that shows total users).
+        self.user_management_page = UserManagementPage(
+            self.content_area,
+            update_main_callback=self._on_user_data_changed # Optional callback
+        )
+        # --- ADD THIS METHOD TO YOUR DASHBOARDAPP CLASS ---
+    def _on_user_data_changed(self):
+        """
+        Callback method called by UserManagementPage when user data changes (e.g., after delete/modify).
+        Use this to refresh other parts of your main application's UI if needed.
+        """
+        print("User data changed! Main application can now refresh its views if needed.")
+        # Example: if you have a dashboard or summary, you might call a method to update it:
+        # self._update_dashboard_summary()
+        # For now, a simple print statement is fine.
+    # ----------------------------------------------------
+
     def _show_facial_recognition_section(self):
         """
         Affiche la section 'Facial Recognition' (Reconnaissance Faciale) dans la zone de contenu.
