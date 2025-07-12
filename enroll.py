@@ -5,6 +5,8 @@ import threading
 import cv2
 import face_recognition
 from PIL import Image, ImageTk, ImageFont # Import ImageFont for fallback icon
+import time # Added for time.sleep
+import json # Added for dummy config file creation
 
 # --- LOGIC IMPORTS ---
 # Ensure this path is correct if project.utils is not in the same directory
@@ -32,32 +34,52 @@ except ImportError as e:
     class TinyDB:
         def __init__(self, db_path):
             print(f"Dummy TinyDB initialized at: {db_path}")
-            self._db = {} # Simple in-memory dict for dummy
+            self._data = {} # Simple in-memory storage for dummy
+            self._tables = {}
         def table(self, name):
-            if name not in self._db:
-                self._db[name] = []
-            print(f"Dummy TinyDB table '{name}' accessed.")
-            return self._db[name]
-        def all(self):
-            print("Dummy TinyDB all() called.")
-            # For dummy, let's return a list of dummy records to simulate existing data
-            # This is important for the "already enrolled" check to work with the dummy DB
-            # Example: A dummy record for ID '12345'
-            return [{"12345": ["John Doe", "enrolled"]}]
-        def insert(self, data):
-            print(f"Dummy TinyDB insert: {data}")
-            # In a real TinyDB, `table().insert()` would add to the table's data.
-            # For this dummy, we can't directly modify the list returned by `table()`
-            # if `table()` returns a new list each time.
-            # For now, this print statement indicates the intent.
-            pass
+            if name not in self._tables:
+                self._tables[name] = DummyTable()
+            return self._tables[name]
         def close(self):
             print("Dummy TinyDB closed.")
-    class where:
+    class DummyTable:
+        def __init__(self):
+            self._records = []
+        def all(self):
+            print("Dummy TinyDB all() called.")
+            return self._records
+        def insert(self, data):
+            print(f"Dummy TinyDB insert: {data}")
+            self._records.append(data)
+        def search(self, query): # Added search for where clause
+            print(f"Dummy TinyDB search: {query}")
+            # Simplified search for demonstration
+            if isinstance(query, where_dummy):
+                # Check if the query key exists in any record and matches the value
+                return [r for r in self._records if query.key in r and r[query.key] == query.value]
+            # For the specific TinyDB query `User[student_id].exists()`
+            # This dummy implementation assumes the document is like {student_id: [name, status]}
+            # So, we check if the student_id is a key in any of the dictionaries in _records
+            if hasattr(query, 'key') and 'exists' in str(query): # Heuristic for .exists()
+                return [r for r in self._records if query.key in r]
+            return []
+
+    class where_dummy:
         def __init__(self, key):
             self.key = key
         def __eq__(self, other):
-            return f"where {self.key} == {other}"
+            self.value = other
+            return self # Return self to allow chaining like where('id') == '123'
+        def exists(self): # Added exists method for TinyDB Query().exists()
+            self.exists_check = True
+            return self
+    where = where_dummy # Alias for the dummy where
+    # For TinyDB Query, it's typically `Query().your_field.exists()` or `Query().your_field == value`
+    # Your original code used `User[student_id].exists()`, which implies student_id is a key in the document.
+    # The dummy `where_dummy` is adjusted to support this.
+    class Query: # Dummy Query class to match the usage `User = Query()`
+        def __getitem__(self, key):
+            return where_dummy(key)
 
 
 # --- Folder Configuration and Initialization ---
@@ -67,27 +89,31 @@ if not os.path.exists("dataset"):
 if not os.path.exists("dataset/PROJECT"):
     os.mkdir("dataset/PROJECT")
 
+# Global event for stopping camera feed/enrollment process
+stop_event = threading.Event()
+camera_window_ref = None # Global reference to the camera window instance
+
 # --- Style Constants (Theme: Green & White - Consistent with Login App) ---
-COLOR_BG = "#F7FFF9"            # Main application background (white)
+COLOR_BG = "#F7FFF9"            # Main application background (light grey/off-white)
 COLOR_CARD_BG = "#FFFFFF"       # Background for main content card (white)
 COLOR_WHITE = "#FFFFFF"         # General white color
-COLOR_GREEN = "#28A745"         # Primary green color for accents, buttons, title bar
-COLOR_GREEN_HOVER = "#218838"   # Darker green for hover effects
+COLOR_GREEN = "#337D45"         # Primary green color for accents, buttons, title bar
+COLOR_GREEN_HOVER = "#28A745"   # Specific green for button hover
 COLOR_TEXT_DARK = "#333333"     # Dark text color for labels and entry content
 COLOR_TEXT_LIGHT = "#666666"    # Lighter text color for subtitles/descriptions
 COLOR_PLACEHOLDER = "#A0A0A0"   # Placeholder text color in entry fields
 COLOR_BORDER = "#E0E0E0"        # Border color for entry fields and card
 COLOR_BORDER_FOCUS = COLOR_GREEN # Border color when entry field is focused
 COLOR_EXIT = COLOR_GREEN        # Close button color (green to match title bar)
-COLOR_EXIT_HOVER = "#1E692D"    # Darker green for close button hover
+COLOR_EXIT_HOVER = "#C82333"    # Darker red for close button hover (kept red for exit)
 COLOR_ERROR = "#DC3545"         # Red color for error messages
 
 # Font definitions (consistent with login.py)
 FONT_TITLE = ("Segoe UI", 22, "bold") # Main title font
-FONT_SUB = ("Segoe UI", 9)           # Subtitle and small text font
-FONT_LABEL = ("Segoe UI", 11)        # Label text font
-FONT_ENTRY = ("Segoe UI", 11)        # Entry field text font
-FONT_BTN = ("Segoe UI", 11, "bold")  # Button text font
+FONT_SUB = ("Segoe UI", 9)            # Subtitle and small text font
+FONT_LABEL = ("Segoe UI", 11)         # Label text font
+FONT_ENTRY = ("Segoe UI", 11)         # Entry field text font
+FONT_BTN = ("Segoe UI", 11, "bold")   # Button text font
 
 
 # --- Camera Feed Window Class ---
@@ -204,12 +230,24 @@ class EnrollmentApp(ttk.Frame):
         self._create_widgets()
 
     def _configure_styles(self):
-        style = ttk.Style()
+        style = ttk.Style(self) # Pass self to ttk.Style for correct scope
         style.configure("Enrollment.TFrame", background=COLOR_CARD_BG) # Main frame background is white
         style.configure("Enrollment.TLabel", background=COLOR_CARD_BG, foreground=COLOR_TEXT_DARK, font=("Segoe UI", 11))
         style.configure("Enrollment.TEntry", fieldbackground=COLOR_WHITE, foreground=COLOR_TEXT_DARK, font=("Segoe UI", 11))
-        style.configure("Enrollment.TButton", background=COLOR_GREEN, foreground="white", font=("Segoe UI", 11, "bold"))
-        style.map("Enrollment.TButton", background=[("active", COLOR_GREEN_HOVER)]) # Darker green on hover
+        
+        # Configure the default style for buttons, then map active state
+        style.configure("Enrollment.TButton", 
+                        background=COLOR_GREEN, 
+                        foreground=COLOR_WHITE, 
+                        font=("Segoe UI", 11, "bold"),
+                        relief="flat",
+                        borderwidth=0,
+                        padding=(10, 5)) # Added padding for consistency
+
+        # Map the active (hover/click) background and foreground
+        style.map("Enrollment.TButton",
+                  background=[("active", COLOR_GREEN_HOVER)], # Hover background
+                  foreground=[("active", COLOR_WHITE)]) # Keep foreground white on hover/active
 
     def _show_message(self, title, message, type="info"):
         """
@@ -243,7 +281,7 @@ class EnrollmentApp(ttk.Frame):
         ok_button = tk.Button(win, text="OK", command=win.destroy,
                                bg=COLOR_GREEN, fg=COLOR_WHITE,
                                font=FONT_BTN, relief="flat",
-                               activebackground=COLOR_GREEN_HOVER, activeforeground=COLOR_WHITE,
+                               activebackground=COLOR_GREEN_HOVER, activeforeground=COLOR_WHITE, # Ensure text is white
                                cursor="hand2")
         ok_button.pack(pady=(0, 10))
         # Hover effects for the OK button
@@ -306,14 +344,14 @@ class EnrollmentApp(ttk.Frame):
         Creates a styled Tkinter button with hover effects.
         """
         btn = tk.Button(parent, text=text, font=FONT_BTN,
-                        bg=COLOR_GREEN, fg=COLOR_WHITE, # Green background, white text
-                        activebackground=COLOR_GREEN_HOVER, activeforeground=COLOR_WHITE, # Darker green on click
-                        relief="flat", bd=0, padx=12, pady=7, # Flat border, adjusted padding
-                        cursor="hand2", # Hand cursor on hover
-                        command=command)
-        # Bind hover effects to change background color
-        btn.bind("<Enter>", lambda e: btn.config(bg=COLOR_GREEN_HOVER))
-        btn.bind("<Leave>", lambda e: btn.config(bg=COLOR_GREEN))
+                         bg=COLOR_GREEN, fg=COLOR_WHITE, # Green background, white text
+                         activebackground=COLOR_GREEN_HOVER, activeforeground=COLOR_WHITE, # Darker green on click, white text
+                         relief="flat", bd=0, padx=12, pady=7, # Flat border, adjusted padding
+                         cursor="hand2", # Hand cursor on hover
+                         command=command)
+        # Bind hover effects to change background color, explicitly keeping foreground white
+        btn.bind("<Enter>", lambda e: btn.config(bg=COLOR_GREEN_HOVER, fg=COLOR_WHITE))
+        btn.bind("<Leave>", lambda e: btn.config(bg=COLOR_GREEN, fg=COLOR_WHITE))
         return btn
 
     def _create_widgets(self):
@@ -375,7 +413,7 @@ class EnrollmentApp(ttk.Frame):
         self.progress_bar.pack(pady=(5, 5), fill="x")
 
         self.percentage_label = tk.Label(progress_frame, text="0%", font=FONT_SUB,
-                                          bg=COLOR_CARD_BG, fg=COLOR_TEXT_LIGHT)
+                                         bg=COLOR_CARD_BG, fg=COLOR_TEXT_LIGHT)
         self.percentage_label.pack(pady=(0, 10), anchor="center")
 
         # Buttons
@@ -441,20 +479,22 @@ class EnrollmentApp(ttk.Frame):
 
         # --- Check for Existing Student ID ---
         found_students = []
-        # Iterate through all records to find if student_id already exists
+        # In dummy TinyDB, .all() might return static data.
+        # A proper TinyDB query would be `student_table.search(Query().student_id == student_id)`
+        # or `student_table.search(User[student_id].exists())` if `student_id` is the key directly.
+        # For the dummy class provided, we need to iterate and check.
         for record in student_table.all():
-            for sub_key, details in record.items():
-                if student_id == sub_key:
-                    found_students.append(student_id)
-                    break
-            if found_students: # Exit outer loop if found
-                break
+            if student_id in record: # Check if the student_id is a key in the record
+                found_students.append(student_id)
+                break # Found, no need to check further
 
         if found_students:
             self._show_message("Already Enrolled", f"Person ID: '{found_students[0]}' is already enrolled.")
             if db: db.close() # Close DB connection
             self.enroll_button.config(state=tk.NORMAL)
             return
+        
+        if db: db.close() # Close the initial DB connection
 
         # Create and show the camera feed window
         self.camera_window_ref = CameraFeedWindow(self.parent_root_for_toplevels,
@@ -469,6 +509,7 @@ class EnrollmentApp(ttk.Frame):
             """
             vs = None # Video stream object
             db_final = None # Database object for final update
+            total_saved = 0
             try:
                 # Start camera capture
                 vs = cv2.VideoCapture(0, cv2.CAP_DSHOW) # 0 for default webcam, CAP_DSHOW for direct show backend
@@ -482,7 +523,6 @@ class EnrollmentApp(ttk.Frame):
                 student_path = os.path.join(conf["dataset_path"], conf["class"], student_id)
                 os.makedirs(student_path, exist_ok=True) # Create if not exists
 
-                total_saved = 0
                 # Loop to capture required number of faces
                 while total_saved < conf["face_count"]:
                     if self.stop_event.is_set():  # Check if the stop event is triggered (e.g., by closing app)
@@ -523,6 +563,12 @@ class EnrollmentApp(ttk.Frame):
                     if self.camera_window_ref and self.camera_window_ref.window.winfo_exists():
                         self.parent_root_for_toplevels.after(0, self.camera_window_ref.update_frame, frame)
                         self.parent_root_for_toplevels.after(0, self.camera_window_ref.update_status, f"Recording ({total_saved}/{conf['face_count']})")
+                    else:
+                        self.stop_event.set() # If camera window closed, stop the process
+                        break # Exit the loop immediately
+                    
+                    # Add a small delay to prevent the loop from running too fast
+                    time.sleep(0.01)
 
             except Exception as e:
                 # Show error message on the main Tkinter thread
@@ -549,12 +595,11 @@ class EnrollmentApp(ttk.Frame):
 
                         # Double-check if student exists before inserting (race condition prevention)
                         found_after_enrollment = False
+                        # The dummy TinyDB table.all() returns a list of records.
+                        # Each record is expected to be a dict where the student_id is a key.
                         for record in student_table_final.all():
-                            for sub_key, details in record.items():
-                                if student_id == sub_key:
-                                    found_after_enrollment = True
-                                    break
-                            if found_after_enrollment:
+                            if student_id in record:
+                                found_after_enrollment = True
                                 break
 
                         if not found_after_enrollment:
@@ -573,12 +618,14 @@ class EnrollmentApp(ttk.Frame):
         """
         Updates the progress bar and percentage label in the GUI.
         """
-        if total_faces > 0:
-            self.progress_bar["value"] = (total_saved / total_faces) * 100
-            self.percentage_label.config(text=f"{int((total_saved / total_faces) * 100)}%")
-        else:
-            self.progress_bar["value"] = 0
-            self.percentage_label.config(text="0%")
+        # Ensure widgets exist before trying to update them
+        if self.progress_bar.winfo_exists() and self.percentage_label.winfo_exists():
+            if total_faces > 0:
+                self.progress_bar["value"] = (total_saved / total_faces) * 100
+                self.percentage_label.config(text=f"{int((total_saved / total_faces) * 100)}%")
+            else:
+                self.progress_bar["value"] = 0
+                self.percentage_label.config(text="0%")
 
     def _reset_form(self):
         """Resets input fields and progress bar for a new enrollment."""
@@ -600,5 +647,62 @@ class EnrollmentApp(ttk.Frame):
         self._show_message("Form Reset", "Form data cleared. Ready for new enrollment.")
         self.enroll_button.config(state=tk.NORMAL) # Ensure enroll button is enabled after reset
 
-# No __main__ block needed here, as this file is imported by main.py
-# The previous __main__ block for independent testing is removed.
+if __name__ == "__main__":
+    # Ensure dataset directories exist for standalone testing
+    if not os.path.exists("dataset"):
+        os.mkdir("dataset")
+    if not os.path.exists("dataset/PROJECT"):
+        os.mkdir("dataset/PROJECT")
+
+    # Create dummy config.json for standalone testing if it doesn't exist
+    if not os.path.exists("config"):
+        os.makedirs("config")
+    if not os.path.exists("config/config.json"):
+        dummy_config = {
+            "db_path": "dummy_enroll_db.json",
+            "dataset_path": "dataset",
+            "class": "PROJECT",
+            "face_count": 5,
+            "detection_method": "hog"
+        }
+        with open("config/config.json", "w") as f:
+            json.dump(dummy_config, f, indent=4)
+        print("Created dummy config/config.json for standalone testing.")
+
+    # This block allows you to run enroll.py by itself for testing purposes.
+    root_test = tk.Tk()
+    root_test.title("Face Enrollment (Standalone Test)")
+    root_test.geometry("750x480")
+    root_test.configure(bg=COLOR_BG)
+    root_test.resizable(False, False)
+    
+    # Configure styles for standalone testing
+    style = ttk.Style(root_test)
+    style.theme_use("clam")
+    style.configure("ContentArea.TFrame", background=COLOR_BG)
+    style.configure("Enrollment.TFrame", background=COLOR_BG) # Ensure main frame background is correct
+    style.configure("EnrollmentCard.TFrame", background=COLOR_WHITE, relief="flat", borderwidth=1, highlightbackground=COLOR_BORDER, highlightthickness=1)
+    style.configure("EnrollmentLabel.TLabel", font=("Segoe UI", 10), foreground=COLOR_TEXT_DARK, background=COLOR_WHITE)
+    style.configure("EnrollmentHeader.TLabel", font=("Segoe UI", 16, "bold"), foreground=COLOR_TEXT_DARK, background=COLOR_WHITE)
+    
+    # Updated button styles for standalone testing
+    style.configure("Enroll.TButton", 
+                    background=COLOR_GREEN, 
+                    foreground=COLOR_WHITE, 
+                    font=FONT_BTN, 
+                    borderwidth=0, 
+                    relief="flat", 
+                    padding=(10, 5))
+    style.map("Enroll.TButton", 
+              background=[("active", COLOR_GREEN_HOVER)], # Hover background
+              foreground=[("active", COLOR_WHITE)]) # Keep foreground white on hover/active
+
+    style.configure("TEntry", padding=(5, 5), font=('Segoe UI', 10), fieldbackground=COLOR_WHITE, foreground=COLOR_TEXT_DARK, borderwidth=1, relief="solid")
+
+    enrollment_test_app = EnrollmentApp(root_test, root_test)
+    enrollment_test_app.pack(fill="both", expand=True)
+
+    tk.Button(root_test, text="Exit Standalone", command=root_test.destroy,
+              bg=COLOR_ERROR, fg=COLOR_WHITE).pack(pady=10)
+
+    root_test.mainloop()
