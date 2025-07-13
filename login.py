@@ -1,13 +1,16 @@
+
 import tkinter as tk
 import subprocess
+import json
+import os
 
 # ---------------------- Colors and Styles (Theme: Green & White) ----------------------
-# Define a consistent color palette for a clean green and white theme.
+# Defines a consistent color palette for a clean green and white theme.
 COLORS = {
     "background": "#FFFFFF",        # Main window background
     "card_bg": "#FFFFFF",           # Background for the central form/card
     "white": "#FFFFFF",             # General white for text/elements
-    "primary_green":"#2F4F4F",     # Main green color
+    "primary_green":"#2F4F4F",      # Main green color
     "green_hover": "#337D45",       # Darker green for hover effects
     "text_dark2": "#333333",
     "text_dark": "#38A752",         # Dark text for main content
@@ -17,16 +20,16 @@ COLORS = {
     "border_focus": "#337D45",      # Green border when an entry is focused
     "exit_button": "#2F4F4F",       # Color for the close button
     "exit_hover": "#337D45",        # Darker green for close button hover
-    "toggle_text": "#2F4F4F",       # Corrected: Removed leading space from color hex
+    "toggle_text": "#2F4F4F",
     "error_red": "#DC3545"          # Red for error messages
 }
 
-# Define consistent font styles for various UI elements.
+# Defines consistent font styles for various UI elements.
 FONTS = {
     "title": ("Segoe UI", 22, "bold"),      # Main title font
-    "subtitle": ("Segoe UI", 9),           # Subtitles and small text
-    "entry": ("Segoe UI", 11),             # Input field font
-    "button": ("Segoe UI", 11, "bold"),    # Button text font
+    "subtitle": ("Segoe UI", 9),            # Subtitles and small text
+    "entry": ("Segoe UI", 11),              # Input field font
+    "button": ("Segoe UI", 11, "bold"),     # Button text font
     "close_button": ("Segoe UI", 10, "bold") # Close button font
 }
 
@@ -39,10 +42,10 @@ class LoginApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Login")
-        self._center_window(300, 400) # Set size and center the window
+        self._center_window(300, 400) # Sets size and centers the window
         self.configure(bg=COLORS["background"])
-        self.resizable(False, False) # Prevent window resizing
-        self.overrideredirect(True) # Remove default window border and title bar
+        self.resizable(False, False) # Prevents window resizing
+        self.overrideredirect(True) # Removes default window border and title bar
 
         # Variables for window dragging
         self._drag_x = None
@@ -87,7 +90,7 @@ class LoginApp(tk.Tk):
         top_bar = tk.Frame(self, bg=COLORS["primary_green"], relief="flat", bd=0)
         top_bar.pack(side="top", fill="x")
 
-        # Bind mouse events for dragging the window using the top bar
+        # Binds mouse events for dragging the window using the top bar
         top_bar.bind("<ButtonPress-1>", self._start_move)
         top_bar.bind("<ButtonRelease-1>", self._stop_move)
         top_bar.bind("<B1-Motion>", self._do_move)
@@ -101,7 +104,7 @@ class LoginApp(tk.Tk):
                                  activeforeground=COLORS["white"], relief="flat", bd=0,
                                  padx=8, pady=3, cursor="hand2")
         close_button.pack(side="right", padx=5, pady=5)
-        # Add hover effects for the close button
+        # Adds hover effects for the close button
         close_button.bind("<Enter>", lambda e: close_button.config(bg=COLORS["exit_hover"]))
         close_button.bind("<Leave>", lambda e: close_button.config(bg=COLORS["exit_button"]))
 
@@ -109,7 +112,7 @@ class LoginApp(tk.Tk):
         """Creates the main login form with input fields and buttons."""
         form = tk.Frame(self, bg=COLORS["card_bg"], relief="flat", bd=0)
         form.pack(expand=True, fill="both", padx=20, pady=20)
-        form.grid_columnconfigure(0, weight=1) # Center content in the grid
+        form.grid_columnconfigure(0, weight=1) # Centers content in the grid
 
         # Title and Subtitle
         tk.Label(form, text="Login", font=FONTS["title"], bg=COLORS["card_bg"],
@@ -126,9 +129,9 @@ class LoginApp(tk.Tk):
 
         # Button to toggle password visibility
         self.toggle_btn = tk.Button(form, text="Show Password", font=FONTS["subtitle"],
-                                    bg=COLORS["card_bg"], fg=COLORS["green_hover"], bd=0,
-                                    relief="flat", activebackground=COLORS["card_bg"],
-                                    cursor="hand2", command=self._toggle_password_visibility)
+                                     bg=COLORS["card_bg"], fg=COLORS["green_hover"], bd=0,
+                                     relief="flat", activebackground=COLORS["card_bg"],
+                                     cursor="hand2", command=self._toggle_password_visibility)
         self.toggle_btn.grid(row=4, sticky="e", pady=(0, 10))
 
         # Login Button
@@ -138,21 +141,59 @@ class LoginApp(tk.Tk):
 
     def _login_attempt(self):
         """
-        Handles the login logic. Checks credentials and launches 'main.py' on success.
+        Handles the login logic. Checks credentials against admin.json and launches 'main.py' on success.
         """
         username = self.username_entry.get()
         password = self.password_entry.get()
 
-        if username == "mumu" and password == "1234":
-            self.destroy() # Close the login window
+        credentials_valid = False
+        try:
+            # Checks if admin.json exists
+            if not os.path.exists("admin.json"):
+                self._show_message("Error", "admin.json not found. Please ensure it exists in the same directory as this script.", "error")
+                return
+
+            with open("admin.json", "r") as f:
+                data = json.load(f)
+                
+                # admin.json can be a list of user objects or a dictionary of username:password pairs.
+                # Example 1 (list of objects): [{"username": "user1", "password": "pwd1"}, {"username": "user2", "password": "pwd2"}]
+                # Example 2 (dictionary): {"user1": "pwd1", "user2": "pwd2"}
+
+                if isinstance(data, list):
+                    for user_data in data:
+                        if user_data.get("username") == username and user_data.get("password") == password:
+                            credentials_valid = True
+                            break
+                elif isinstance(data, dict):
+                    if data.get(username) == password:
+                        credentials_valid = True
+                else:
+                    self._show_message("Error", "Invalid format in admin.json. Expected a list of user objects or a dictionary.", "error")
+                    return
+
+        except json.JSONDecodeError:
+            self._show_message("Error", "Error reading admin.json. Please check its JSON format.", "error")
+            return
+        except FileNotFoundError:
+            # This case is already handled by os.path.exists, but good to have a fallback
+            self._show_message("Error", "admin.json not found. Please ensure it exists.", "error")
+            return
+        except Exception as e:
+            self._show_message("Error", f"An unexpected error occurred while reading admin.json: {e}", "error")
+            return
+
+        if credentials_valid:
+            self.destroy() # Closes the login window
             try:
-                # Launch the 'main.py' script using subprocess
+                # Launches the 'main.py' script using subprocess
+                # Ensure main.py is in the same directory or provide its full path
                 subprocess.Popen(["python", "main.py"])
             except Exception as e:
-                # Show an error message if 'main.py' cannot be launched
+                # Shows an error message if 'main.py' cannot be launched
                 self._show_message("Error", f"Unable to launch 'main.py':\n{e}", "error")
         else:
-            # Show an error message for incorrect credentials
+            # Shows an error message for incorrect credentials
             self._show_message("Login Error", "Incorrect username or password.", "error")
 
     def _show_message(self, title, message, msg_type="info"):
@@ -164,13 +205,13 @@ class LoginApp(tk.Tk):
             message (str): The message content.
             msg_type (str): "info" or "error" to change text color.
         """
-        win = tk.Toplevel(self) # Create a new top-level window
+        win = tk.Toplevel(self) # Creates a new top-level window
         win.title(title)
         win.configure(bg=COLORS["card_bg"])
 
         win_width = 250
         win_height = 150
-        # Calculate position to center the message box over the main window
+        # Calculates position to center the message box over the main window
         parent_x = self.winfo_x()
         parent_y = self.winfo_y()
         parent_width = self.winfo_width()
@@ -180,8 +221,8 @@ class LoginApp(tk.Tk):
         y_pos = parent_y + (parent_height // 2) - (win_height // 2)
         win.geometry(f"{win_width}x{win_height}+{x_pos}+{y_pos}")
 
-        win.transient(self) # Make the message box transient to the root window
-        win.grab_set() # Make the message box modal (block interaction with root)
+        win.transient(self) # Makes the message box transient to the root window
+        win.grab_set() # Makes the message box modal (blocks interaction with root)
 
         text_color = COLORS["error_red"] if msg_type == "error" else COLORS["text_dark"]
         tk.Label(win, text=message, bg=COLORS["card_bg"], fg=text_color,
@@ -192,15 +233,15 @@ class LoginApp(tk.Tk):
                                                COLORS["white"])
         ok_button.pack(pady=(0, 10))
 
-        win.wait_window(win) # Wait for the message box to be closed
+        win.wait_window(win) # Waits for the message box to be closed
 
     def _toggle_password_visibility(self):
         """Toggles the visibility of the password in the password entry field."""
         if self.password_entry.entry.cget("show") == "*":
-            self.password_entry.entry.config(show="") # Show characters
+            self.password_entry.entry.config(show="") # Shows characters
             self.toggle_btn.config(text="Hide Password")
         else:
-            self.password_entry.entry.config(show="*") # Hide characters with asterisks
+            self.password_entry.entry.config(show="*") # Hides characters with asterisks
             self.toggle_btn.config(text="Show Password")
 
     def _create_themed_button(self, parent, text, command, bg, hover_bg, fg):
@@ -219,10 +260,10 @@ class LoginApp(tk.Tk):
             tk.Button: The created button widget.
         """
         btn = tk.Button(parent, text=text, font=FONTS["button"], bg=bg, fg=fg,
-                        activebackground=hover_bg, activeforeground=fg,
-                        bd=0, relief="flat", padx=10, pady=5,
-                        command=command, cursor="hand2")
-        # Bind hover effects
+                         activebackground=hover_bg, activeforeground=fg,
+                         bd=0, relief="flat", padx=10, pady=5,
+                         command=command, cursor="hand2")
+        # Binds hover effects
         btn.bind("<Enter>", lambda e: btn.config(bg=hover_bg))
         btn.bind("<Leave>", lambda e: btn.config(bg=bg))
         return btn
@@ -242,36 +283,36 @@ class CustomEntry(tk.Frame):
         self.has_user_input = False # Tracks if the entry has user input or is showing placeholder
 
         self.entry = tk.Entry(self, font=FONTS["entry"], bg=COLORS["card_bg"],
-                              fg=COLORS["placeholder"], bd=0, relief="flat", # Placeholder color initially
-                              insertbackground=COLORS["primary_green"], justify="center")
+                               fg=COLORS["placeholder"], bd=0, relief="flat", # Placeholder color initially
+                               insertbackground=COLORS["primary_green"], justify="center")
         self.entry.pack(fill="x", padx=8, ipady=6)
 
-        self.entry.insert(0, placeholder) # Insert initial placeholder text
+        self.entry.insert(0, placeholder) # Inserts initial placeholder text
 
-        # Bind focus events to handle placeholder and border changes
+        # Binds focus events to handle placeholder and border changes
         self.entry.bind("<FocusIn>", self._on_focus_in)
         self.entry.bind("<FocusOut>", self._on_focus_out)
 
         if self.is_password:
-            self.entry.config(show="") # Initially show placeholder, not asterisks
+            self.entry.config(show="") # Initially shows placeholder, not asterisks
 
     def _on_focus_in(self, event):
         """Handles actions when the entry field gains focus."""
         if not self.has_user_input: # If it's currently showing the placeholder
-            self.entry.delete(0, "end") # Clear the placeholder
-            self.entry.config(fg="#000000") # Set text color to BLACK when typing starts
+            self.entry.delete(0, "end") # Clears the placeholder
+            self.entry.config(fg="#000000") # Sets text color to BLACK when typing starts
             if self.is_password:
-                self.entry.config(show="*") # Show asterisks for password
+                self.entry.config(show="*") # Shows asterisks for password
             self.has_user_input = True
-        self.config(highlightthickness=2) # Thicken border on focus
+        self.config(highlightthickness=2) # Thickens border on focus
 
     def _on_focus_out(self, event):
         """Handles actions when the entry field loses focus."""
         if not self.entry.get(): # If the entry is empty
-            self.entry.insert(0, self.placeholder) # Re-insert placeholder
-            self.entry.config(fg=COLORS["placeholder"], show="") # Reset text color to placeholder color
+            self.entry.insert(0, self.placeholder) # Re-inserts placeholder
+            self.entry.config(fg=COLORS["placeholder"], show="") # Resets text color to placeholder color
             self.has_user_input = False
-        self.config(highlightthickness=1) # Reset border thickness
+        self.config(highlightthickness=1) # Resets border thickness
 
     def get(self):
         """Returns the actual content of the entry field."""
